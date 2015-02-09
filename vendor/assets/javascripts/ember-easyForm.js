@@ -5,11 +5,11 @@
 // ==========================================================================
 
 
- // Version: 1.0.0.beta.1
+ // Version: 1.1.0
 
 (function() {
 Ember.EasyForm = Ember.Namespace.create({
-  VERSION: '1.0.0.beta.1'
+  VERSION: 'VERSION_STRING_PLACEHOLDER'
 });
 
 })();
@@ -29,7 +29,10 @@ Ember.EasyForm.Config = Ember.Namespace.create({
       inputTemplate: 'easyForm/input',
       errorTemplate: 'easyForm/error',
       labelTemplate: 'easyForm/label',
-      hintTemplate: 'easyForm/hint'
+      hintTemplate: 'easyForm/hint',
+      wrapControls: false,
+      controlsWrapperClass: '',
+      buttonClass: ''
     }
   },
   modulePrefix: 'appkit',
@@ -53,13 +56,10 @@ Ember.EasyForm.Config = Ember.Namespace.create({
     this._templates[name] = template;
   },
   getTemplate: function(name) {
-    if (typeof requirejs !== 'undefined' && typeof requirejs._eak_seen !== 'undefined' && requirejs._eak_seen[name]) {
-      return require(this.modulePrefix + '/templates/' + name, null, null, true);
-    } else {
-      return Ember.TEMPLATES[name] || this._templates[name];
-    }
+    return this._templates[name];
   }
 });
+
 
 })();
 
@@ -70,7 +70,7 @@ Ember.Handlebars.registerHelper('error-field', function(property, options) {
   options = Ember.EasyForm.processOptions(property, options);
 
   if (options.hash.propertyBinding) {
-    options.hash.property = Ember.Handlebars.get(this, options.hash.propertyBinding, options);
+    options.hash.property = options.data.view.getStream(options.hash.propertyBinding).value();
   }
   return Ember.Handlebars.helpers.view.call(this, Ember.EasyForm.Error, options);
 });
@@ -81,8 +81,15 @@ Ember.Handlebars.registerHelper('error-field', function(property, options) {
 
 (function() {
 Ember.Handlebars.registerHelper('form-for', function(object, options) {
-  options.data.keywords.formForModelPath = object;
-  return Ember.Handlebars.helpers.view.call(this, Ember.EasyForm.Form, options);
+  var parentView = options.data.view;
+
+  Ember.Handlebars.helpers.view.call(this, Ember.EasyForm.Form, options);
+
+  var newView = parentView._childViews[parentView._childViews.length - 1];
+
+  newView._keywords.formForModelPath = object;
+
+  return newView;
 });
 
 })();
@@ -120,21 +127,27 @@ Ember.Handlebars.registerHelper('input', function(property, options) {
 
 
 (function() {
+
 var get = Ember.get,
     set = Ember.set;
 
 Ember.Handlebars.registerHelper('input-field', function(property, options) {
+  function handlebarsGet(root, path, options) {
+    return options.data.view.getStream(path).value();
+  }
+
+
   options = Ember.EasyForm.processOptions(property, options);
 
   if (options.hash.propertyBinding) {
-    options.hash.property = Ember.Handlebars.get(this, options.hash.propertyBinding, options);
+    options.hash.property = handlebarsGet(this, options.hash.propertyBinding, options);
   }
 
   if (options.hash.inputOptionsBinding) {
-    options.hash.inputOptions = Ember.Handlebars.get(this, options.hash.inputOptionsBinding, options);
+    options.hash.inputOptions = handlebarsGet(this, options.hash.inputOptionsBinding, options);
   }
 
-  var modelPath = Ember.Handlebars.get(this, 'formForModelPath', options);
+  var modelPath = handlebarsGet(this, 'formForModelPath', options);
   options.hash.modelPath = modelPath;
 
   property = options.hash.property;
@@ -142,7 +155,7 @@ Ember.Handlebars.registerHelper('input-field', function(property, options) {
   var modelPropertyPath = function(property) {
     if(!property) { return null; }
 
-    var startsWithKeyword = !!options.data.keywords[property.split('.')[0]];
+    var startsWithKeyword = !!options.data.view._keywords[property.split('.')[0]];
 
     if (startsWithKeyword) {
       return property;
@@ -236,6 +249,7 @@ Ember.Handlebars.registerHelper('input-field', function(property, options) {
   }
 });
 
+
 })();
 
 
@@ -265,6 +279,7 @@ Ember.Handlebars.registerHelper('submit', function(value, options) {
     Ember.Handlebars.helpers.view.call(this, Ember.EasyForm.Submit, options);
 });
 
+
 })();
 
 
@@ -277,6 +292,7 @@ Ember.Handlebars.registerHelper('submit', function(value, options) {
 
 (function() {
 Ember.EasyForm.BaseView = Ember.View.extend({
+  classNameBindings: ['property'],
   wrapper: function() {
     var wrapperView = this.nearestWithProperty('wrapper');
     if (wrapperView) {
@@ -289,10 +305,16 @@ Ember.EasyForm.BaseView = Ember.View.extend({
     return Ember.EasyForm.Config.getWrapper(this.get('wrapper'));
   }.property('wrapper'),
   templateForName: function(name) {
-    return Ember.EasyForm.Config.getTemplate(name);
+    var template;
+
+    if (this.container) {
+      template = this.container.lookup('template:' + name);
+    }
+
+    return template || Ember.EasyForm.Config.getTemplate(name);
   },
   formForModel: function(){
-    var formForModelPath = this.get('templateData.keywords.formForModelPath');
+    var formForModelPath = this._keywords.formForModelPath;
 
     if (formForModelPath === 'context' || formForModelPath === 'controller' || formForModelPath === 'this') {
       return this.get('context');
@@ -303,6 +325,7 @@ Ember.EasyForm.BaseView = Ember.View.extend({
     }
   }.property()
 });
+
 
 })();
 
@@ -367,6 +390,7 @@ Ember.EasyForm.Form = Ember.EasyForm.BaseView.extend({
   }
 });
 
+
 })();
 
 
@@ -378,6 +402,7 @@ Ember.EasyForm.Hint = Ember.EasyForm.BaseView.extend({
   templateName: Ember.computed.oneWay('wrapperConfig.hintTemplate'),
   hintText: Ember.computed.oneWay('text')
 });
+
 
 })();
 
@@ -416,7 +441,7 @@ Ember.EasyForm.Input = Ember.EasyForm.BaseView.extend({
   },
   concatenatedProperties: ['inputOptions', 'bindableInputOptions'],
   inputOptions: ['as', 'collection', 'optionValuePath', 'optionLabelPath', 'selection', 'value', 'multiple', 'name'],
-  bindableInputOptions: ['placeholder', 'prompt'],
+  bindableInputOptions: ['placeholder', 'prompt', 'disabled'],
   defaultOptions: {
     name: function(){
       if (this.property) {
@@ -479,6 +504,7 @@ Ember.EasyForm.Input = Ember.EasyForm.BaseView.extend({
   }
 });
 
+
 })();
 
 
@@ -493,6 +519,7 @@ Ember.EasyForm.Label = Ember.EasyForm.BaseView.extend({
   }.property('text', 'property'),
   templateName: Ember.computed.oneWay('wrapperConfig.labelTemplate')
 });
+
 
 })();
 
@@ -509,6 +536,7 @@ Ember.EasyForm.Select = Ember.Select.extend();
 Ember.EasyForm.Submit = Ember.EasyForm.BaseView.extend({
   tagName: 'input',
   attributeBindings: ['type', 'value', 'disabled'],
+  classNameBindings: ['wrapperConfig.buttonClass'],
   type: 'submit',
   disabled: function() {
     return !this.get('formForModel.isValid');
@@ -519,6 +547,7 @@ Ember.EasyForm.Submit = Ember.EasyForm.BaseView.extend({
   }
 });
 
+
 })();
 
 
@@ -526,17 +555,7 @@ Ember.EasyForm.Submit = Ember.EasyForm.BaseView.extend({
 (function() {
 Ember.EasyForm.Button = Ember.EasyForm.BaseView.extend({
   tagName: 'button',
-  template: Ember.Handlebars.template(function anonymous(Handlebars,depth0,helpers,partials,data) {
-this.compilerInfo = [4,'>= 1.0.0'];
-helpers = this.merge(helpers, Ember.Handlebars.helpers); data = data || {};
-  var hashTypes, hashContexts, escapeExpression=this.escapeExpression;
-
-
-  hashTypes = {};
-  hashContexts = {};
-  data.buffer.push(escapeExpression(helpers._triageMustache.call(depth0, "text", {hash:{},contexts:[depth0],types:["ID"],hashContexts:hashContexts,hashTypes:hashTypes,data:data})));
-  
-}),
+  template: Ember.Handlebars.compile('{{text}}'),
   attributeBindings: ['type', 'disabled'],
   type: 'submit',
   disabled: function() {
@@ -547,6 +566,7 @@ helpers = this.merge(helpers, Ember.Handlebars.helpers); data = data || {};
     this.set('formForModel.text', this.value);
   }
 });
+
 
 })();
 
@@ -573,129 +593,39 @@ Ember.EasyForm.TextField = Ember.TextField.extend();
 
 
 (function() {
-Ember.EasyForm.Config.registerTemplate('easyForm/error', Ember.Handlebars.template(function anonymous(Handlebars,depth0,helpers,partials,data) {
-this.compilerInfo = [4,'>= 1.0.0'];
-helpers = this.merge(helpers, Ember.Handlebars.helpers); data = data || {};
-  var hashTypes, hashContexts, escapeExpression=this.escapeExpression;
+Ember.EasyForm.Config.registerTemplate('easyForm/error', Ember.Handlebars.compile('{{view.errorText}}'));
 
-
-  hashTypes = {};
-  hashContexts = {};
-  data.buffer.push(escapeExpression(helpers._triageMustache.call(depth0, "view.errorText", {hash:{},contexts:[depth0],types:["ID"],hashContexts:hashContexts,hashTypes:hashTypes,data:data})));
-  
-}));
 
 })();
 
 
 
 (function() {
-Ember.EasyForm.Config.registerTemplate('easyForm/hint', Ember.Handlebars.template(function anonymous(Handlebars,depth0,helpers,partials,data) {
-this.compilerInfo = [4,'>= 1.0.0'];
-helpers = this.merge(helpers, Ember.Handlebars.helpers); data = data || {};
-  var hashTypes, hashContexts, escapeExpression=this.escapeExpression;
-
-
-  hashTypes = {};
-  hashContexts = {};
-  data.buffer.push(escapeExpression(helpers._triageMustache.call(depth0, "view.hintText", {hash:{},contexts:[depth0],types:["ID"],hashContexts:hashContexts,hashTypes:hashTypes,data:data})));
-  
-}));
+Ember.EasyForm.Config.registerTemplate('easyForm/hint', Ember.Handlebars.compile('{{view.hintText}}'));
 
 })();
 
 
 
 (function() {
-Ember.EasyForm.Config.registerTemplate('easyForm/input', Ember.Handlebars.template(function anonymous(Handlebars,depth0,helpers,partials,data) {
-this.compilerInfo = [4,'>= 1.0.0'];
-helpers = this.merge(helpers, Ember.Handlebars.helpers); data = data || {};
-  var buffer = '', stack1, hashContexts, hashTypes, options, helperMissing=helpers.helperMissing, escapeExpression=this.escapeExpression;
+Ember.EasyForm.Config.registerTemplate('easyForm/input', Ember.Handlebars.compile('{{label-field propertyBinding="view.property" textBinding="view.label"}}{{partial "easyForm/inputControls"}}'));
 
-
-  hashContexts = {'propertyBinding': depth0,'textBinding': depth0};
-  hashTypes = {'propertyBinding': "STRING",'textBinding': "STRING"};
-  options = {hash:{
-    'propertyBinding': ("view.property"),
-    'textBinding': ("view.label")
-  },contexts:[],types:[],hashContexts:hashContexts,hashTypes:hashTypes,data:data};
-  data.buffer.push(escapeExpression(((stack1 = helpers['label-field'] || depth0['label-field']),stack1 ? stack1.call(depth0, options) : helperMissing.call(depth0, "label-field", options))));
-  hashTypes = {};
-  hashContexts = {};
-  options = {hash:{},contexts:[depth0],types:["STRING"],hashContexts:hashContexts,hashTypes:hashTypes,data:data};
-  data.buffer.push(escapeExpression(((stack1 = helpers.partial || depth0.partial),stack1 ? stack1.call(depth0, "easyForm/inputControls", options) : helperMissing.call(depth0, "partial", "easyForm/inputControls", options))));
-  return buffer;
-  
-}));
 
 })();
 
 
 
 (function() {
-Ember.EasyForm.Config.registerTemplate('easyForm/inputControls', Ember.Handlebars.template(function anonymous(Handlebars,depth0,helpers,partials,data) {
-this.compilerInfo = [4,'>= 1.0.0'];
-helpers = this.merge(helpers, Ember.Handlebars.helpers); data = data || {};
-  var buffer = '', stack1, stack2, hashContexts, hashTypes, options, helperMissing=helpers.helperMissing, escapeExpression=this.escapeExpression, self=this;
+Ember.EasyForm.Config.registerTemplate('easyForm/inputControls', Ember.Handlebars.compile('{{input-field propertyBinding="view.property" inputOptionsBinding="view.inputOptionsValues"}}{{#if view.showError}}{{error-field propertyBinding="view.property"}}{{/if}}{{#if view.hint}}{{hint-field propertyBinding="view.property" textBinding="view.hint"}}{{/if}}'));
 
-function program1(depth0,data) {
-  
-  var stack1, hashContexts, hashTypes, options;
-  hashContexts = {'propertyBinding': depth0};
-  hashTypes = {'propertyBinding': "STRING"};
-  options = {hash:{
-    'propertyBinding': ("view.property")
-  },contexts:[],types:[],hashContexts:hashContexts,hashTypes:hashTypes,data:data};
-  data.buffer.push(escapeExpression(((stack1 = helpers['error-field'] || depth0['error-field']),stack1 ? stack1.call(depth0, options) : helperMissing.call(depth0, "error-field", options))));
-  }
-
-function program3(depth0,data) {
-  
-  var stack1, hashContexts, hashTypes, options;
-  hashContexts = {'propertyBinding': depth0,'textBinding': depth0};
-  hashTypes = {'propertyBinding': "STRING",'textBinding': "STRING"};
-  options = {hash:{
-    'propertyBinding': ("view.property"),
-    'textBinding': ("view.hint")
-  },contexts:[],types:[],hashContexts:hashContexts,hashTypes:hashTypes,data:data};
-  data.buffer.push(escapeExpression(((stack1 = helpers['hint-field'] || depth0['hint-field']),stack1 ? stack1.call(depth0, options) : helperMissing.call(depth0, "hint-field", options))));
-  }
-
-  hashContexts = {'propertyBinding': depth0,'inputOptionsBinding': depth0};
-  hashTypes = {'propertyBinding': "STRING",'inputOptionsBinding': "STRING"};
-  options = {hash:{
-    'propertyBinding': ("view.property"),
-    'inputOptionsBinding': ("view.inputOptionsValues")
-  },contexts:[],types:[],hashContexts:hashContexts,hashTypes:hashTypes,data:data};
-  data.buffer.push(escapeExpression(((stack1 = helpers['input-field'] || depth0['input-field']),stack1 ? stack1.call(depth0, options) : helperMissing.call(depth0, "input-field", options))));
-  hashTypes = {};
-  hashContexts = {};
-  stack2 = helpers['if'].call(depth0, "view.showError", {hash:{},inverse:self.noop,fn:self.program(1, program1, data),contexts:[depth0],types:["ID"],hashContexts:hashContexts,hashTypes:hashTypes,data:data});
-  if(stack2 || stack2 === 0) { data.buffer.push(stack2); }
-  hashTypes = {};
-  hashContexts = {};
-  stack2 = helpers['if'].call(depth0, "view.hint", {hash:{},inverse:self.noop,fn:self.program(3, program3, data),contexts:[depth0],types:["ID"],hashContexts:hashContexts,hashTypes:hashTypes,data:data});
-  if(stack2 || stack2 === 0) { data.buffer.push(stack2); }
-  return buffer;
-  
-}));
 
 })();
 
 
 
 (function() {
-Ember.EasyForm.Config.registerTemplate('easyForm/label', Ember.Handlebars.template(function anonymous(Handlebars,depth0,helpers,partials,data) {
-this.compilerInfo = [4,'>= 1.0.0'];
-helpers = this.merge(helpers, Ember.Handlebars.helpers); data = data || {};
-  var hashTypes, hashContexts, escapeExpression=this.escapeExpression;
+Ember.EasyForm.Config.registerTemplate('easyForm/label', Ember.Handlebars.compile('{{view.labelText}}'));
 
-
-  hashTypes = {};
-  hashContexts = {};
-  data.buffer.push(escapeExpression(helpers._triageMustache.call(depth0, "view.labelText", {hash:{},contexts:[depth0],types:["ID"],hashContexts:hashContexts,hashTypes:hashTypes,data:data})));
-  
-}));
 
 })();
 
@@ -740,6 +670,7 @@ Ember.EasyForm.processOptions = function(property, options) {
 
   return options;
 };
+
 
 })();
 
