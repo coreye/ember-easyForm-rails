@@ -6,10 +6,10 @@ require 'ember-easyForm-rails/version'
 Gem::Specification.new do |spec|
   spec.name          = "ember-easyForm-rails"
   spec.version       = Ember::EasyForm::Rails::VERSION
-  spec.authors       = ["frederik dudzik"]
-  spec.email         = ["4004blog@gmail.com"]
+  spec.authors       = ["Alves Lobo Michael"]
+  spec.email         = ["michael.alveslobo@gmail.com"]
   spec.summary       = "ember-easyForm for the rails asset pipeline"
-  spec.homepage      = "https://github.com/doodzik/ember-easyForm-rails"
+  spec.homepage      = "https://github.com/coreye/ember-easyForm-rails"
   spec.license       = "MIT"
 
   spec.files         = Dir["{lib,vendor}/**/*"] + ["LICENSE.txt", "README.md"]
